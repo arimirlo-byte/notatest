@@ -1,0 +1,18 @@
+{
+  "name": "NotariadoQuest — Exequátur Honduras",
+  "short_name": "NotariadoQuest",
+  "description": "Simulador interactivo multiplataforma para el Examen de Notariado en Honduras.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

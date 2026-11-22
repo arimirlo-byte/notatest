@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>NotariadoQuest — Academia Jurídica Exequátur Honduras</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .card-hover {
+            transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .card-hover:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        .btn-press {
+            transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease;
+        }
+        .btn-press:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        @keyframes slideUpFade {
+            0% { transform: translateY(10px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        .animate-reveal { animation: slideUpFade 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300 selection:bg-amber-500/30 selection:text-amber-900 dark:selection:text-amber-200">
+
+    <!-- Notificación Flotante (Toast) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm"></div>
+
+    <!-- PANTALLA DE CARGA INICIAL -->
+    <div id="loading-screen" class="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col items-center justify-center gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 flex items-center justify-center shadow-xl shadow-amber-500/20 animate-pulse">
+            <i class="fa-solid fa-scale-balanced text-2xl"></i>
+        </div>
+        <div class="text-center space-y-1">
+            <h1 class="font-serif text-2xl font-extrabold">NotariadoQuest</h1>
+            <p class="text-xs text-slate-400">Verificando sesión y sincronización...</p>
+        </div>
+    </div>
+
+    <!-- VISTA DE ACCESO RESTRINGIDO / LOGIN -->
+    <div id="auth-view" class="hidden flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div class="w-full max-w-md space-y-5 animate-reveal">
+            <!-- Encabezado de Marca -->
+            <div class="text-center space-y-3">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 flex items-center justify-center mx-auto shadow-xl shadow-amber-500/20">
+                    <i class="fa-solid fa-scale-balanced text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-serif font-extrabold text-3xl text-slate-900 dark:text-white">NotariadoQuest</h1>
+                    <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Simulador Privado de Exequátur Notarial — Honduras</p>
+                </div>
+            </div>
+
+            <!-- Alerta de Configuración Pendiente -->
+            <div id="config-warning" class="hidden bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-2xl p-4 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+                <p class="font-extrabold flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-amber-500"></i> Configuración de Supabase pendiente</p>
+                <p>Edita <code class="font-mono bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded">js/config.js</code> con tu <strong>SUPABASE_URL</strong> y <strong>SUPABASE_ANON_KEY</strong> siguiendo la guía en <code class="font-mono">README.md</code>.</p>
+            </div>
+
+            <!-- Tarjeta de Autenticación -->
+            <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl p-6 sm:p-8 space-y-6">
+                <div class="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl">
+                    <button type="button" id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm transition-all">
+                        Iniciar Sesión
+                    </button>
+                    <button type="button" id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2.5 text-xs font-extrabold rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all">
+                        Activar Cuenta
+                    </button>
+                </div>
+
+                <!-- Mensaje de Error / Acceso Denegado -->
+                <div id="auth-error-box" class="hidden bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 rounded-2xl p-3.5 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2.5">
+                    <i class="fa-solid fa-lock text-rose-500 mt-0.5"></i>
+                    <span id="auth-error-text"></span>
+                </div>
+
+                <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                    <div class="space-y-1.5">
+                        <label for="auth-email" class="block text-xs font-bold text-slate-600 dark:text-slate-300">Correo electrónico autorizado</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-envelope absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+                            <input id="auth-email" type="email" required autocomplete="email" placeholder="nombre@correo.com" class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="auth-password" class="block text-xs font-bold text-slate-600 dark:text-slate-300">Contraseña</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-key absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+                            <input id="auth-password" type="password" required minlength="6" autocomplete="current-password" placeholder="Mínimo 6 caracteres" class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                    </div>
+
+                    <button id="auth-submit-btn" type="submit" class="w-full btn-press bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-sm py-3.5 rounded-2xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span id="auth-submit-label">Ingresar al Simulador</span>
+                    </button>
+                </form>
+
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 text-center space-y-2">
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        <i class="fa-solid fa-shield-halved text-amber-500 mr-1"></i>
+                        Acceso exclusivo por invitación. Solo los correos aprobados por el administrador pueden ingresar y sincronizar su progreso.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APLICACIÓN PRINCIPAL (SOLO VISIBLE TRAS AUTORIZACIÓN) -->
+    <div id="app-shell" class="hidden flex-1 flex flex-col">
+
+        <!-- Barra Superior Ejecutiva -->
+        <header class="sticky top-0 z-30 bg-slate-900/95 dark:bg-slate-950/95 text-white border-b border-slate-800 glass-panel shadow-md">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+                <!-- Marca -->
+                <div class="flex items-center gap-3.5 cursor-pointer group" onclick="showHome()">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
+                        <i class="fa-solid fa-scale-balanced text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="font-serif font-extrabold text-xl tracking-tight text-white">NotariadoQuest</h1>
+                            <span class="hidden sm:inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">Honduras</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                            <span id="header-user-email" class="truncate max-w-[160px] sm:max-w-[220px]">usuario@correo.com</span>
+                            <span id="sync-badge" class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                <i class="fa-solid fa-cloud-check"></i> Sincronizado
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Métricas, Admin y Controles -->
+                <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 px-2.5 py-1.5 rounded-xl" title="Racha diaria de estudio">
+                        <i class="fa-solid fa-fire text-amber-400 text-xs sm:text-sm"></i>
+                        <span id="stat-streak" class="font-bold text-amber-100 text-xs sm:text-sm">1</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 px-2.5 py-1.5 rounded-xl" title="Puntos de Experiencia acumulados">
+                        <i class="fa-solid fa-award text-sky-400 text-xs sm:text-sm"></i>
+                        <span id="stat-xp" class="font-bold text-sky-100 text-xs sm:text-sm">0 XP</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 px-2.5 py-1.5 rounded-xl" title="Vidas disponibles">
+                        <i class="fa-solid fa-heart text-rose-400 text-xs sm:text-sm"></i>
+                        <span id="stat-hearts" class="font-bold text-rose-100 text-xs sm:text-sm">5</span>
+                    </div>
+
+                    <!-- Botón Panel de Administrador (solo visible para admins) -->
+                    <button id="admin-nav-btn" onclick="showAdminPanel()" class="hidden btn-press px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm" title="Gestionar usuarios autorizados">
+                        <i class="fa-solid fa-users-gear"></i>
+                        <span class="hidden md:inline">Accesos</span>
+                    </button>
+
+                    <button onclick="toggleTheme()" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-amber-300 transition-colors" title="Alternar modo claro / oscuro">
+                        <i id="theme-icon" class="fa-solid fa-moon text-sm"></i>
+                    </button>
+
+                    <button onclick="handleLogout()" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-rose-900/70 border border-slate-700 hover:border-rose-700 flex items-center justify-center text-slate-300 hover:text-rose-300 transition-colors" title="Cerrar sesión">
+                        <i class="fa-solid fa-right-from-bracket text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenedor Principal -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+
+            <!-- VISTA PRINCIPAL: DASHBOARD ACADÉMICO -->
+            <div id="home-view" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                <!-- COLUMNA IZQUIERDA (4 cols): PANEL DE ESTADO, ACCIONES Y BUSCADOR -->
+                <aside class="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
+
+                    <!-- Tarjeta de Progreso Global con Anillo SVG -->
+                    <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-slate-800 relative overflow-hidden">
+                        <div class="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-amber-500/10 blur-2xl pointer-events-none"></div>
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="space-y-1.5">
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                                    <i class="fa-solid fa-graduation-cap"></i> Plan de Estudio
+                                </span>
+                                <h2 class="font-serif text-2xl font-bold text-white leading-snug">Dominio del Temario</h2>
+                                <p id="total-questions-badge" class="text-xs text-slate-300 font-medium">0 Preguntas disponibles</p>
+                            </div>
+
+                            <!-- Anillo Circular de Progreso -->
+                            <div class="relative w-20 h-20 shrink-0 flex items-center justify-center">
+                                <svg class="w-20 h-20 -rotate-90" viewBox="0 0 36 36">
+                                    <path class="text-slate-800" stroke-width="3.2" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                    <path id="progress-ring-path" class="text-amber-400 transition-all duration-700" stroke-dasharray="0, 100" stroke-width="3.2" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                </svg>
+                                <span id="progress-ring-text" class="absolute text-sm font-extrabold text-amber-300">0%</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 pt-4 border-t border-slate-800/80 space-y-2">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-400">Preguntas dominadas</span>
+                                <span id="global-progress-text" class="font-bold text-slate-200">0 / 0</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="global-progress-bar" class="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Botón Principal de Entrenamiento -->
+                        <button onclick="startRandomPractice()" class="mt-5 w-full btn-press bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-sm py-3.5 px-4 rounded-2xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2.5">
+                            <i class="fa-solid fa-shuffle"></i>
+                            <span>Simulacro Aleatorio (10 Preguntas)</span>
+                        </button>
+                    </div>
+
+                    <!-- Tarjeta de Respaldo Portátil (.JSON) + Sync Manual -->
+                    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                <i class="fa-solid fa-cloud-arrow-up text-amber-500"></i> Sincronización y Respaldo
+                            </h3>
+                            <button onclick="forceCloudSync()" class="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1">
+                                <i class="fa-solid fa-rotate"></i> Sincronizar ahora
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Tu avance se sincroniza automáticamente en la nube entre todos tus dispositivos. También puedes exportar o importar un respaldo local en <code class="font-mono">.json</code>.
+                        </p>
+                        <div class="grid grid-cols-2 gap-2.5 pt-1">
+                            <button onclick="exportProgressJSON()" class="btn-press bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 border border-slate-800 dark:border-slate-700">
+                                <i class="fa-solid fa-download text-amber-400"></i>
+                                <span>Exportar .json</span>
+                            </button>
+                            <label class="btn-press bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer">
+                                <i class="fa-solid fa-upload text-sky-500"></i>
+                                <span>Importar .json</span>
+                                <input type="file" id="import-json-input" accept=".json,application/json" class="hidden" onchange="importProgressJSON(event)">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Buscador de Artículos y Conceptos -->
+                    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-3">
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-book-bookmark text-indigo-500"></i> Consulta Rápida de Leyes
+                        </h3>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+                            <input type="text" id="search-input" oninput="filterQuestionsSearch(this.value)" placeholder="Ej. Art. 59, protocolo, hipoteca, pareatis..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <div id="search-results" class="hidden max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 pt-1"></div>
+                    </div>
+
+                </aside>
+
+                <!-- COLUMNA DERECHA (8 cols): MÓDULOS POR RAMA DEL DERECHO -->
+                <section class="lg:col-span-8 space-y-5">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h2 class="font-serif text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Unidades Temáticas</h2>
+                            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Selecciona una unidad para desplegar sus lecciones de práctica progresiva.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleAllUnits(true)" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-amber-400 transition-colors">
+                                Expandir todo
+                            </button>
+                            <button onclick="toggleAllUnits(false)" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-amber-400 transition-colors">
+                                Contraer
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="units-container" class="space-y-4"></div>
+                </section>
+
+            </div>
+
+            <!-- VISTA DE PRÁCTICA / CUESTIONARIO -->
+            <div id="quiz-view" class="hidden max-w-3xl mx-auto animate-reveal">
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+                    <div class="px-6 py-4 bg-slate-900 text-white flex items-center gap-4">
+                        <button onclick="showHome()" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors" title="Volver al panel">
+                            <i class="fa-solid fa-arrow-left"></i>
+                        </button>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+                                <span id="quiz-unit-badge" class="truncate max-w-[220px] sm:max-w-md text-amber-300">Unidad</span>
+                                <span id="quiz-counter" class="font-extrabold text-white">1 / 10</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="quiz-progress-bar" class="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 sm:p-8 space-y-6">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span id="quiz-type-badge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Selección Única</span>
+                            <span class="text-xs font-semibold text-slate-400"><i class="fa-solid fa-gavel mr-1"></i> Examen de Notariado</span>
+                        </div>
+
+                        <h3 id="quiz-question-text" class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-relaxed"></h3>
+
+                        <div id="quiz-cloze-box" class="hidden bg-amber-50/80 dark:bg-amber-950/30 border-2 border-dashed border-amber-400/70 dark:border-amber-600/50 rounded-2xl p-5 font-serif text-base sm:text-lg text-slate-800 dark:text-slate-100 leading-relaxed"></div>
+
+                        <div id="quiz-multi-hint" class="hidden flex items-center gap-2.5 text-xs font-semibold text-indigo-800 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 px-4 py-3 rounded-2xl">
+                            <i class="fa-solid fa-list-check text-indigo-500 text-base"></i>
+                            <span>Pregunta de <strong>selección múltiple</strong>: marca todas las opciones correctas antes de comprobar.</span>
+                        </div>
+
+                        <div id="quiz-options-container" class="space-y-3"></div>
+                    </div>
+
+                    <div id="quiz-footer" class="px-6 py-5 bg-slate-50 dark:bg-slate-950/70 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div id="feedback-box" class="hidden flex-1 space-y-2 animate-reveal">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span id="feedback-title" class="font-extrabold text-base"></span>
+                                <span id="feedback-article" class="text-xs font-bold px-3 py-1 rounded-xl border shadow-sm"></span>
+                            </div>
+                            <p id="feedback-rationale" class="text-xs sm:text-sm leading-relaxed"></p>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-3 ml-auto shrink-0">
+                            <button id="check-btn" onclick="checkAnswer()" disabled class="btn-press bg-slate-900 dark:bg-amber-500 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white dark:text-slate-950 font-extrabold px-7 py-3.5 rounded-2xl text-sm shadow-md">
+                                Comprobar Respuesta
+                            </button>
+                            <button id="next-btn" onclick="nextQuestion()" class="hidden btn-press bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-7 py-3.5 rounded-2xl text-sm shadow-md">
+                                Siguiente <i class="fa-solid fa-arrow-right ml-1.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA DE RESULTADOS DE LECCIÓN -->
+            <div id="result-view" class="hidden max-w-xl mx-auto animate-reveal">
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 sm:p-10 text-center shadow-xl space-y-6">
+                    <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center mx-auto text-4xl shadow-lg shadow-amber-500/25">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                    <div class="space-y-1.5">
+                        <span class="text-xs font-extrabold uppercase tracking-widest text-amber-600 dark:text-amber-400">Sesión Finalizada</span>
+                        <h2 class="font-serif text-3xl font-extrabold text-slate-900 dark:text-white">¡Excelente Jornada!</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Tu progreso ha sido guardado y sincronizado en la nube.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Experiencia Ganada</p>
+                            <p id="result-xp" class="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">+0 XP</p>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Precisión</p>
+                            <p id="result-accuracy" class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">0%</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                        <button onclick="showHome()" class="flex-1 btn-press bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-3.5 rounded-2xl text-sm">
+                            Volver al Temario
+                        </button>
+                        <button onclick="startRandomPractice()" class="flex-1 btn-press bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3.5 rounded-2xl text-sm shadow-md">
+                            Nueva Ronda Rápida
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA PANEL DE ADMINISTRADOR (GESTIÓN DE ACCESOS) -->
+            <div id="admin-view" class="hidden max-w-5xl mx-auto space-y-6 animate-reveal">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <button onclick="showHome()" class="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:border-amber-400 transition-colors">
+                            <i class="fa-solid fa-arrow-left"></i>
+                        </button>
+                        <div>
+                            <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white">Panel de Control de Accesos</h2>
+                            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Administra qué personas tienen autorización para ingresar y sincronizar su avance.</p>
+                        </div>
+                    </div>
+                    <button onclick="loadAdminUsers()" class="btn-press px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-rotate"></i> Actualizar lista
+                    </button>
+                </div>
+
+                <!-- Formulario para Autorizar Nuevo Correo -->
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+                    <h3 class="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-user-plus text-amber-500"></i> Autorizar nueva persona
+                    </h3>
+                    <form onsubmit="handleAddAuthorizedUser(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        <div class="sm:col-span-4">
+                            <input id="admin-new-email" type="email" required placeholder="Correo electrónico *" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <div class="sm:col-span-3">
+                            <input id="admin-new-name" type="text" placeholder="Nombre completo" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <select id="admin-new-role" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <option value="student">Estudiante</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <button type="submit" class="w-full btn-press bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm py-2.5 px-4 rounded-xl shadow-sm flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-plus"></i> Autorizar
+                            </button>
+                        </div>
+                    </form>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                        Una vez autorizado el correo, la persona solo debe entrar a la web, ir a la pestaña <strong>Activar Cuenta</strong> y crear su contraseña con ese mismo correo.
+                    </p>
+                </div>
+
+                <!-- Lista de Usuarios Autorizados -->
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">Usuarios en Lista Blanca</h3>
+                        <span id="admin-user-count" class="text-xs font-bold text-slate-500">0 usuarios</span>
+                    </div>
+                    <div id="admin-users-list" class="divide-y divide-slate-100 dark:divide-slate-800">
+                        <div class="p-8 text-center text-sm text-slate-500">Cargando usuarios...</div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/questions.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
